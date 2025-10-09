@@ -87,6 +87,174 @@ export interface MockResponse {
   body: string;
 }
 
+export interface ModifierRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  match_request: RequestMatch;
+  modifications: Modification[];
+  created_at: string;
+}
+
+export interface CreateModifierRule {
+  name: string;
+  enabled: boolean;
+  priority: number;
+  match_request: RequestMatch;
+  modifications: Modification[];
+}
+
+export interface UpdateModifierRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  match_request: RequestMatch;
+  modifications: Modification[];
+}
+
+export interface RequestMatch {
+  method?: string;
+  url_pattern: string;
+  url_match_type: "exact" | "contains" | "regex" | "startswith" | "endswith";
+  status_codes?: number[];
+}
+
+export type Modification =
+  | {
+      type: "replace_body";
+      pattern: string;
+      replacement: string;
+      use_regex: boolean;
+    }
+  | {
+      type: "add_header";
+      name: string;
+      value: string;
+    }
+  | {
+      type: "remove_header";
+      name: string;
+    }
+  | {
+      type: "change_status";
+      status: number;
+    }
+  | {
+      type: "inject_delay";
+      delay_ms: number;
+    }
+  | {
+      type: "modify_json";
+      path: string;
+      value: any;
+    };
+
+export interface RateLimitRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  match_request: RateLimitMatch;
+  limit: RateLimit;
+  response: RateLimitResponse;
+  created_at: string;
+}
+
+export interface CreateRateLimitRule {
+  name: string;
+  enabled: boolean;
+  priority: number;
+  match_request: RateLimitMatch;
+  limit: RateLimit;
+  response: RateLimitResponse;
+}
+
+export interface RateLimitMatch {
+  method?: string;
+  url_pattern: string;
+  url_match_type: "exact" | "contains" | "regex" | "startswith" | "endswith";
+  key_type: KeyType;
+}
+
+export type KeyType =
+  | "global"
+  | "ipaddress"
+  | { header: { name: string } }
+  | { custom: { pattern: string } };
+
+export interface RateLimit {
+  max_requests: number;
+  window_seconds: number;
+  burst_size?: number;
+}
+
+export interface RateLimitResponse {
+  status: number;
+  headers: Record<string, string>;
+  body: string;
+  delay_ms?: number;
+}
+
+export interface BucketStats {
+  total_buckets: number;
+  active_limits: number;
+}
+
+export interface LatencyRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  match_request: LatencyMatch;
+  delay: DelayConfig;
+  created_at: string;
+}
+
+export interface CreateLatencyRule {
+  name: string;
+  enabled: boolean;
+  priority: number;
+  match_request: LatencyMatch;
+  delay: DelayConfig;
+}
+
+export interface LatencyMatch {
+  method?: string;
+  url_pattern: string;
+  url_match_type: "exact" | "contains" | "regex" | "startswith" | "endswith";
+  apply_to: "request" | "response" | "both";
+}
+
+export type DelayConfig =
+  | { type: "fixed"; delay_ms: number }
+  | { type: "random"; min_ms: number; max_ms: number }
+  | { type: "normal"; mean_ms: number; std_dev_ms: number }
+  | {
+      type: "spike";
+      base_delay_ms: number;
+      spike_delay_ms: number;
+      spike_probability: number;
+    };
+
+export interface LatencyStats {
+  total_injections: number;
+  total_delay_ms: number;
+  min_delay_ms: number;
+  max_delay_ms: number;
+  avg_delay_ms: number;
+  by_rule: Record<string, RuleStats>;
+}
+
+export interface RuleStats {
+  rule_id: string;
+  rule_name: string;
+  hits: number;
+  total_delay_ms: number;
+  avg_delay_ms: number;
+}
+
 export function formatBody(body?: number[]): string {
   if (!body || body.length === 0) return "";
   try {

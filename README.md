@@ -1,6 +1,6 @@
 # 🚀 Dev Proxy
 
-A high-performance development proxy built with Rust and Pingora, featuring traffic recording, mock responses, filtering, and real-time analytics dashboard.
+A high-performance development proxy built with Rust and Pingora, featuring traffic recording, mock responses, response modification, rate limiting, latency injection, and real-time analytics dashboard.
 
 ![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
 ![SvelteKit](https://img.shields.io/badge/sveltekit-%23f1413d.svg?style=for-the-badge&logo=svelte&logoColor=white)
@@ -12,6 +12,9 @@ A high-performance development proxy built with Rust and Pingora, featuring traf
 - **High-Performance Proxy** - Built on Cloudflare's Pingora framework
 - **Traffic Recording** - Capture all HTTP requests and responses with full body content
 - **Request Mocking** - Intercept requests and return custom responses without hitting backend
+- **Response Modification** - Modify responses on-the-fly with powerful transformation rules
+- **Rate Limiting** - Control request rates with flexible rate limiting strategies
+- **Latency Injection** - Simulate network delays and test application resilience
 - **Advanced Filtering** - Search and filter by method, status code, URL pattern, duration
 - **Real-time Analytics** - Live dashboard with charts and statistics
 
@@ -30,6 +33,31 @@ A high-performance development proxy built with Rust and Pingora, featuring traf
 - **Artificial Delays** - Simulate slow API responses for testing
 - **Live Management** - Create, edit, delete, and toggle mocks without restarting
 
+### 🔧 Response Modification Features
+- **Body Replacement** - Replace text patterns in response bodies with regex support
+- **Header Manipulation** - Add or remove response headers dynamically
+- **Status Code Changes** - Override backend status codes
+- **JSON Modification** - Modify specific JSON fields in responses
+- **Delay Injection** - Add artificial delays to specific endpoints
+- **Priority-Based Rules** - Control modification order with priority system
+
+### ⏱️ Latency Injection Features
+- **Fixed Delays** - Add consistent delays to requests/responses
+- **Random Delays** - Simulate variable network conditions (min-max range)
+- **Normal Distribution** - Realistic latency patterns with mean and standard deviation
+- **Spike Simulation** - Occasional high latency with configurable probability
+- **Separate Request/Response** - Apply delays to requests, responses, or both
+- **Pattern Matching** - Target specific endpoints with flexible URL matching
+
+### 🚦 Rate Limiting Features
+- **Per-IP Rate Limiting** - Limit requests by client IP address
+- **Per-Header Rate Limiting** - Limit by custom header values (e.g., API keys)
+- **Global Rate Limiting** - Shared rate limits across all clients
+- **Custom Key Patterns** - Define custom rate limiting keys
+- **Burst Capacity** - Allow temporary bursts above the normal limit
+- **Configurable Responses** - Custom status codes, headers, and error messages
+- **Bucket Reset** - Manual reset of rate limit counters per rule
+
 ## 🏗️ Architecture
 
 ```
@@ -39,11 +67,23 @@ A high-performance development proxy built with Rust and Pingora, featuring traf
        │
        ▼
 ┌─────────────────┐
-│   HTTP Layer    │ ◄── Handles mocks (Port 8080)
+│   HTTP Layer    │ ◄── Handles rate limits, mocks, latency (Port 8080)
 │   (Port 8080)   │
 └────────┬────────┘
          │
          ▼
+    ┌────────┐
+    │ Rate   │──Limited──► Return 429 Response
+    │ Limit? │
+    └───┬────┘
+        │Pass
+        ▼
+    ┌────────┐
+    │ Latency│──Delay──► Apply Request Delay
+    │ Inject?│
+    └───┬────┘
+        │
+        ▼
     ┌────────┐
     │ Mock?  │──Yes──► Return Mock Response
     └───┬────┘
@@ -58,6 +98,23 @@ A high-performance development proxy built with Rust and Pingora, featuring traf
 ┌─────────────────┐
 │    Upstream     │
 │     Backend     │
+└────────┬────────┘
+         │
+         ▼
+    ┌────────┐
+    │Modifier│──Apply──► Modify Response
+    └───┬────┘
+        │
+        ▼
+    ┌────────┐
+    │Latency │──Delay──► Apply Response Delay
+    │ Inject?│
+    └───┬────┘
+        │
+        ▼
+┌─────────────────┐
+│   Response to   │
+│     Client      │
 └─────────────────┘
 ```
 
@@ -71,7 +128,7 @@ A high-performance development proxy built with Rust and Pingora, featuring traf
 
 ### Build from Source
 
-```
+```bash
 # Clone the repository
 git clone https://github.com/aarambhdevhub/dev-proxy.git
 cd dev-proxy
@@ -92,7 +149,7 @@ cargo build --release
 
 ### Basic Usage
 
-```
+```bash
 # Start proxy with recording enabled
 ./target/release/dev-proxy --record
 
@@ -116,7 +173,7 @@ OPTIONS:
 
 ### Examples
 
-```
+```bash
 # Proxy to custom backend
 ./target/release/dev-proxy --upstream http://api.example.com --record
 
@@ -131,7 +188,7 @@ OPTIONS:
 
 ### Send Requests Through Proxy
 
-```
+```bash
 # Make requests to the proxy (it forwards to upstream)
 curl http://localhost:8080/api/users
 curl -X POST http://localhost:8080/api/users \
@@ -153,63 +210,66 @@ curl -X POST http://localhost:8080/api/users \
    - **Delay**: Artificial delay in milliseconds
    - **Headers**: Response headers (one per line)
    - **Body**: Response body content
-
 4. Click **"Create Mock Rule"**
 
-### Example Mock Rules
+### Create Response Modification Rules
 
-**Mock a successful response:**
-```
-{
-  "name": "Mock User List",
-  "method": "GET",
-  "url_pattern": "/api/users",
-  "url_match_type": "contains",
-  "response": {
-    "status": 200,
-    "headers": {
-      "content-type": "application/json"
-    },
-    "body": "{\"users\": [{\"id\": 1, \"name\": \"John Doe\"}]}"
-  }
-}
-```
+1. Open UI at `http://localhost:3000/modifiers`
+2. Click **"+ New Modifier"**
+3. Configure your modifier rule:
+   - **Name**: Descriptive name
+   - **Priority**: Execution order (higher first)
+   - **Match Request**: URL pattern and optional method
+   - **Match Type**: exact, contains, regex, starts with, ends with
+   - **Status Codes**: Apply only to specific status codes (optional)
+   - **Modifications**: Add multiple modifications:
+     - Replace Body: Find and replace text/regex patterns
+     - Add Header: Insert custom headers
+     - Remove Header: Remove existing headers
+     - Change Status: Override status code
+     - Inject Delay: Add artificial delay
+     - Modify JSON: Change specific JSON fields
+4. Click **"Create Modifier Rule"**
 
-**Mock an error response:**
-```
-{
-  "name": "Simulate 500 Error",
-  "method": "POST",
-  "url_pattern": "/api/orders",
-  "url_match_type": "exact",
-  "response": {
-    "status": 500,
-    "headers": {
-      "content-type": "application/json"
-    },
-    "body": "{\"error\": \"Internal Server Error\"}"
-  },
-  "delay_ms": 1000
-}
-```
+### Create Rate Limit Rules
 
-**Mock with regex:**
-```
-{
-  "name": "Mock User by ID",
-  "url_pattern": "^/api/users/\\d+$",
-  "url_match_type": "regex",
-  "response": {
-    "status": 200,
-    "headers": {
-      "content-type": "application/json"
-    },
-    "body": "{\"id\": 1, \"name\": \"Mocked User\"}"
-  }
-}
-```
+1. Open UI at `http://localhost:3000/rate-limits`
+2. Click **"+ New Rate Limit"**
+3. Configure your rate limit rule:
+   - **Name**: Descriptive name
+   - **Priority**: Rule matching order
+   - **URL Pattern**: Target endpoints
+   - **Method**: Optional HTTP method filter
+   - **Rate Limit Key**: Choose from:
+     - Global: Shared limit across all clients
+     - Per IP Address: Individual limit per client IP
+     - Per Header: Limit by header value (e.g., API key)
+     - Custom: Define custom key pattern
+   - **Max Requests**: Number of allowed requests
+   - **Window (seconds)**: Time window for the limit
+   - **Burst Size**: Optional extra capacity for bursts
+   - **Response**: Custom 429 response configuration
+4. Click **"Create Rule"**
 
-## 📊 Dashboard Features
+### Create Latency Injection Rules
+
+1. Open UI at `http://localhost:3000/latency`
+2. Click **"+ New Latency Rule"**
+3. Configure your latency rule:
+   - **Name**: Descriptive name
+   - **Priority**: Rule matching order
+   - **URL Pattern**: Target endpoints
+   - **Method**: Optional HTTP method filter
+   - **Apply To**: Request, Response, or Both
+   - **Delay Type**: Choose from:
+     - Fixed: Constant delay
+     - Random: Variable delay (min-max)
+     - Normal: Bell curve distribution
+     - Spike: Occasional high latency
+   - **Delay Parameters**: Configure based on delay type
+4. Click **"Create Rule"**
+
+## 📊 Dashboard Pages
 
 ### Recordings Page (`/`)
 - View all captured HTTP requests/responses
@@ -230,11 +290,31 @@ curl -X POST http://localhost:8080/api/users \
 - View all configured mocks with status indicators
 - Priority-based rule matching
 
+### Modifiers Page (`/modifiers`)
+- Create, edit, delete response modification rules
+- Enable/disable rules individually
+- View all modification rules with details
+- Test modifications in real-time
+
+### Rate Limits Page (`/rate-limits`)
+- Create, edit, delete rate limiting rules
+- Enable/disable limits with one click
+- View active bucket statistics
+- Reset rate limit counters per rule
+- Monitor rate limit hits and rejections
+
+### Latency Page (`/latency`)
+- Create, edit, delete latency injection rules
+- Enable/disable latency simulation
+- View latency statistics (min, max, avg)
+- Monitor latency injections per rule
+- Test different delay patterns
+
 ## 🔧 Configuration
 
 ### Environment Variables
 
-```
+```bash
 # Set log level
 export RUST_LOG=info
 
@@ -258,6 +338,9 @@ dev-proxy/
 │   │   ├── proxy.rs       # Pingora proxy implementation
 │   │   ├── http_layer.rs  # HTTP layer for mocking
 │   │   ├── mock.rs        # Mock rule management
+│   │   ├── modifier.rs    # Response modification
+│   │   ├── ratelimiter.rs # Rate limiting logic
+│   │   ├── latencyinjector.rs # Latency injection
 │   │   ├── storage.rs     # Recording storage
 │   │   ├── recorder.rs    # Traffic recorder
 │   │   ├── ui.rs          # UI server
@@ -266,30 +349,37 @@ dev-proxy/
 ├── ui/                     # SvelteKit frontend
 │   ├── src/
 │   │   ├── routes/        # Pages
+│   │   │   ├── /          # Recordings
+│   │   │   ├── dashboard/ # Analytics
+│   │   │   ├── mocks/     # Mock management
+│   │   │   ├── modifiers/ # Response modification
+│   │   │   ├── rate-limits/ # Rate limiting
+│   │   │   └── latency/   # Latency injection
 │   │   ├── lib/           # Components
 │   │   └── app.css        # Styles
 │   ├── package.json
 │   └── svelte.config.js
+├── example-backend/        # Example backend for testing
 └── README.md
 ```
 
 ### Running in Development Mode
 
 **Backend:**
-```
+```bash
 cd proxy
 cargo watch -x run
 ```
 
 **Frontend:**
-```
+```bash
 cd ui
 npm run dev
 ```
 
 ### Running Tests
 
-```
+```bash
 # Rust tests
 cd proxy
 cargo test
@@ -299,7 +389,6 @@ cd ui
 npm test
 ```
 
-
 ## 🎨 Tech Stack
 
 ### Backend
@@ -307,14 +396,41 @@ npm test
 - **Pingora** - Cloudflare's HTTP proxy framework
 - **Tokio** - Async runtime
 - **Hyper** - HTTP library
+- **Reqwest** - HTTP client
 - **Serde** - Serialization framework
 - **Regex** - Pattern matching
+- **Parkinglot** - Efficient synchronization primitives
 
 ### Frontend
 - **SvelteKit** - Web framework
 - **TypeScript** - Type-safe JavaScript
 - **TailwindCSS** - Utility-first CSS
-- **Chart.js** - Data visualization (optional)
+
+## 🔥 Key Features Explained
+
+### Response Modification
+Transform responses on-the-fly without changing backend code:
+- Replace sensitive data in responses
+- Add CORS headers dynamically
+- Modify JSON responses for testing
+- Override error responses
+- Inject delays for specific endpoints
+
+### Rate Limiting
+Protect your APIs and test rate limiting behavior:
+- Multiple key types (IP, header, global, custom)
+- Configurable window and burst capacity
+- Custom error responses
+- Real-time statistics and monitoring
+- Manual bucket reset capability
+
+### Latency Injection
+Simulate real-world network conditions:
+- Test timeout handling
+- Verify loading states
+- Simulate degraded performance
+- Model realistic latency patterns
+- Separate request/response delays
 
 ## 🤝 Contributing
 

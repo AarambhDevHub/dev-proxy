@@ -4,13 +4,19 @@ use structopt::StructOpt;
 
 mod config;
 mod http_layer;
+mod latency_injector;
 mod mock;
+mod modifier;
 mod proxy;
+mod rate_limiter;
 mod recorder;
 mod storage;
 mod ui;
 
 use config::ProxyConfig;
+use latency_injector::LatencyInjector;
+use modifier::ResponseModifier;
+use rate_limiter::RateLimiter;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "dev-proxy", about = "Development proxy with traffic recording")]
@@ -57,11 +63,17 @@ fn main() -> Result<()> {
     );
 
     let storage = storage::Storage::new();
-    let mock_manager = mock::MockManager::new(); // Add this
+    let mock_manager = mock::MockManager::new();
+    let response_modifier = ResponseModifier::new();
+    let rate_limiter = RateLimiter::new();
+    let latency_injector = LatencyInjector::new();
 
     // Start UI server in a separate thread with its own runtime
     let ui_storage = storage.clone();
-    let ui_mock_manager = mock_manager.clone(); // Add this
+    let ui_mock_manager = mock_manager.clone();
+    let ui_modifier = response_modifier.clone();
+    let ui_rate_limiter = rate_limiter.clone();
+    let ui_latency = latency_injector.clone();
     let ui_port = config.ui_port;
     thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_multi_thread()
@@ -70,7 +82,16 @@ fn main() -> Result<()> {
             .unwrap();
 
         rt.block_on(async {
-            if let Err(e) = ui::start_ui_server(ui_port, ui_storage, ui_mock_manager).await {
+            if let Err(e) = ui::start_ui_server(
+                ui_port,
+                ui_storage,
+                ui_mock_manager,
+                ui_modifier,
+                ui_rate_limiter,
+                ui_latency,
+            )
+            .await
+            {
                 eprintln!("UI server error: {}", e);
             }
         });
@@ -78,6 +99,9 @@ fn main() -> Result<()> {
 
     let http_storage = storage.clone();
     let http_mock_manager = mock_manager.clone();
+    let http_modifier = response_modifier.clone();
+    let http_rate_limiter = rate_limiter.clone();
+    let http_latency = latency_injector.clone();
     let http_port = opt.port;
     let pingora_port = opt.internal_port;
     thread::spawn(move || {
@@ -92,6 +116,9 @@ fn main() -> Result<()> {
                 pingora_port,
                 http_storage,
                 http_mock_manager,
+                http_modifier,
+                http_rate_limiter,
+                http_latency,
             )
             .await
             {

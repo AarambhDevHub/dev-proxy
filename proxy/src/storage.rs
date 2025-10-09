@@ -35,6 +35,14 @@ pub struct FilterOptions {
     pub to_time: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReplayRequest {
+    pub method: String,
+    pub url: String,
+    pub headers: HashMap<String, String>,
+    pub body: Option<Vec<u8>>,
+}
+
 #[derive(Clone)]
 pub struct Storage {
     pub recordings: Arc<RwLock<HashMap<String, RecordedRequest>>>,
@@ -306,6 +314,16 @@ impl Storage {
             top_endpoints,
             timeline,
         }
+    }
+
+    pub fn get_for_replay(&self, id: &str) -> Option<ReplayRequest> {
+        let recordings = self.recordings.read();
+        recordings.get(id).map(|req| ReplayRequest {
+            method: req.method.clone(),
+            url: req.url.clone(),
+            headers: req.headers.clone(),
+            body: req.body.clone(),
+        })
     }
 }
 
