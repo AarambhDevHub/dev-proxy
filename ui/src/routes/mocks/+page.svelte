@@ -1,17 +1,37 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
-  import type { MockRule } from '$lib/types';
+  import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
+  import { toast } from "svelte-sonner";
+  import * as Card from "$lib/components/ui/card";
+  import { Button } from "$lib/components/ui/button";
+  import { Badge } from "$lib/components/ui/badge";
+  import { Skeleton } from "$lib/components/ui/skeleton";
+  import { Switch } from "$lib/components/ui/switch";
+  import * as Dialog from "$lib/components/ui/dialog";
+  import { Separator } from "$lib/components/ui/separator";
+  import {
+    RefreshCw,
+    Trash2,
+    Plus,
+    Pencil,
+    Clock,
+    Drama,
+    Code,
+  } from "lucide-svelte";
+  import type { MockRule } from "$lib/types";
 
   let rules: MockRule[] = $state([]);
   let loading = $state(true);
+  let deleteDialogOpen = $state(false);
+  let ruleToDelete: MockRule | null = $state(null);
 
   async function fetchRules() {
     try {
-      const res = await fetch('/api/mocks');
+      const res = await fetch("/api/mocks");
       rules = await res.json();
     } catch (error) {
-      console.error('Failed to fetch mock rules:', error);
+      console.error("Failed to fetch mock rules:", error);
+      toast.error("Failed to fetch mock rules");
     } finally {
       loading = false;
     }
@@ -19,49 +39,70 @@
 
   async function toggleRule(id: string) {
     try {
-      await fetch(`/api/mocks/${id}/toggle`, { method: 'POST' });
+      await fetch(`/api/mocks/${id}/toggle`, { method: "POST" });
       await fetchRules();
+      toast.success("Mock rule toggled");
     } catch (error) {
-      console.error('Failed to toggle rule:', error);
+      console.error("Failed to toggle rule:", error);
+      toast.error("Failed to toggle rule");
     }
   }
 
-  async function deleteRule(id: string) {
-    if (!confirm('Delete this mock rule?')) return;
+  async function deleteRule() {
+    if (!ruleToDelete) return;
     try {
-      await fetch(`/api/mocks/${id}`, { method: 'DELETE' });
+      await fetch(`/api/mocks/${ruleToDelete.id}`, { method: "DELETE" });
       await fetchRules();
+      toast.success("Mock rule deleted");
     } catch (error) {
-      console.error('Failed to delete rule:', error);
+      console.error("Failed to delete rule:", error);
+      toast.error("Failed to delete rule");
+    } finally {
+      deleteDialogOpen = false;
+      ruleToDelete = null;
     }
   }
 
   async function clearAll() {
-    if (!confirm('Delete all mock rules?')) return;
     try {
-      await fetch('/api/mocks', { method: 'DELETE' });
+      await fetch("/api/mocks", { method: "DELETE" });
       rules = [];
+      toast.success("All mock rules cleared");
     } catch (error) {
-      console.error('Failed to clear rules:', error);
+      console.error("Failed to clear rules:", error);
+      toast.error("Failed to clear rules");
     }
   }
 
   function getMatchTypeLabel(type: string): string {
     switch (type) {
-      case 'exact': return 'Exact Match';
-      case 'contains': return 'Contains';
-      case 'regex': return 'Regex';
-      case 'startswith': return 'Starts With';
-      case 'endswith': return 'Ends With';
-      default: return type;
+      case "exact":
+        return "Exact";
+      case "contains":
+        return "Contains";
+      case "regex":
+        return "Regex";
+      case "startswith":
+        return "Starts With";
+      case "endswith":
+        return "Ends With";
+      default:
+        return type;
     }
   }
 
-  function getStatusColorClass(status: number): string {
-    if (status >= 200 && status < 300) return 'bg-green-100 text-green-800';
-    if (status >= 300 && status < 400) return 'bg-blue-100 text-blue-800';
-    if (status >= 400 && status < 500) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-red-100 text-red-800';
+  function getStatusVariant(
+    status: number,
+  ): "default" | "secondary" | "destructive" | "outline" {
+    if (status >= 200 && status < 300) return "default";
+    if (status >= 300 && status < 400) return "secondary";
+    if (status >= 400) return "destructive";
+    return "outline";
+  }
+
+  function confirmDelete(rule: MockRule) {
+    ruleToDelete = rule;
+    deleteDialogOpen = true;
   }
 
   onMount(() => {
@@ -69,122 +110,157 @@
   });
 </script>
 
-<div class="container mx-auto px-4 py-8">
-  <div class="flex justify-between items-center mb-6">
-    <div>
-      <h1 class="text-3xl font-bold">Mock Rules</h1>
-      <p class="text-gray-600 mt-1">Intercept requests and return custom responses</p>
-    </div>
-    <div class="flex gap-4">
-      <button
-        onclick={fetchRules}
-        class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-      >
-        Refresh
-      </button>
-      {#if rules.length > 0}
-        <button
-          onclick={clearAll}
-          class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-        >
-          Clear All
-        </button>
-      {/if}
-      <button
-        onclick={() => goto('/mocks/new')}
-        class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-      >
-        + New Mock
-      </button>
-    </div>
+<!-- Header -->
+<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+  <div>
+    <h1 class="text-3xl font-bold tracking-tight">Mock Rules</h1>
+    <p class="text-muted-foreground">
+      Intercept requests and return custom responses
+    </p>
   </div>
+  <div class="flex items-center gap-2">
+    <Button variant="outline" size="sm" onclick={fetchRules}>
+      <RefreshCw class="mr-2 h-4 w-4" />
+      Refresh
+    </Button>
+    {#if rules.length > 0}
+      <Button variant="destructive" size="sm" onclick={clearAll}>
+        <Trash2 class="mr-2 h-4 w-4" />
+        Clear All
+      </Button>
+    {/if}
+    <Button size="sm" onclick={() => goto("/mocks/new")}>
+      <Plus class="mr-2 h-4 w-4" />
+      New Mock
+    </Button>
+  </div>
+</div>
 
-  {#if loading}
-    <div class="text-center py-12">
-      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-      <p class="mt-4 text-gray-600">Loading mock rules...</p>
-    </div>
-  {:else if rules.length === 0}
-    <div class="text-center py-12 bg-white rounded-lg shadow">
-      <div class="text-6xl mb-4">🎭</div>
-      <h3 class="text-xl font-semibold mb-2">No Mock Rules</h3>
-      <p class="text-gray-600 mb-6">Create your first mock rule to intercept requests</p>
-      <button
-        onclick={() => goto('/mocks/new')}
-        class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
-      >
+{#if loading}
+  <div class="grid gap-4 mt-6">
+    {#each Array(3) as _}
+      <Card.Root>
+        <Card.Content class="p-6">
+          <div class="flex items-center gap-4">
+            <Skeleton class="h-6 w-32" />
+            <Skeleton class="h-6 w-16" />
+            <Skeleton class="h-6 flex-1" />
+          </div>
+        </Card.Content>
+      </Card.Root>
+    {/each}
+  </div>
+{:else if rules.length === 0}
+  <Card.Root class="mt-6">
+    <Card.Content class="flex flex-col items-center justify-center py-12">
+      <Drama class="h-12 w-12 text-muted-foreground mb-4" />
+      <h3 class="text-lg font-semibold">No Mock Rules</h3>
+      <p class="text-muted-foreground mb-4">
+        Create your first mock rule to intercept requests
+      </p>
+      <Button onclick={() => goto("/mocks/new")}>
+        <Plus class="mr-2 h-4 w-4" />
         Create Mock Rule
-      </button>
-    </div>
-  {:else}
-    <div class="space-y-4">
-      {#each rules as rule}
-        <div class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-          <div class="flex items-start justify-between">
-            <div class="flex-1">
-              <div class="flex items-center gap-3 mb-3">
-                <h3 class="text-xl font-semibold">{rule.name}</h3>
-                <span class="px-2 py-1 text-xs font-semibold rounded {getStatusColorClass(rule.response.status)}">
+      </Button>
+    </Card.Content>
+  </Card.Root>
+{:else}
+  <div class="grid gap-4 mt-6">
+    {#each rules as rule (rule.id)}
+      <Card.Root class="hover:shadow-md transition-shadow">
+        <Card.Content class="p-6">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-3 mb-3 flex-wrap">
+                <h3 class="text-lg font-semibold">{rule.name}</h3>
+                <Badge variant={getStatusVariant(rule.response.status)}>
                   {rule.response.status}
-                </span>
+                </Badge>
                 {#if rule.method}
-                  <span class="px-2 py-1 text-xs font-semibold rounded bg-gray-100 text-gray-800">
-                    {rule.method}
-                  </span>
+                  <Badge variant="outline">{rule.method}</Badge>
                 {/if}
-                <span class="px-2 py-1 text-xs rounded bg-purple-100 text-purple-800">
-                  Priority: {rule.priority}
-                </span>
+                <Badge variant="secondary">Priority: {rule.priority}</Badge>
                 {#if rule.delay_ms}
-                  <span class="px-2 py-1 text-xs rounded bg-orange-100 text-orange-800">
-                    Delay: {rule.delay_ms}ms
-                  </span>
+                  <Badge variant="secondary" class="gap-1">
+                    <Clock class="h-3 w-3" />
+                    {rule.delay_ms}ms
+                  </Badge>
                 {/if}
               </div>
 
               <div class="space-y-2">
                 <div class="flex items-center gap-2 text-sm">
-                  <span class="text-gray-600 font-medium">URL Pattern:</span>
-                  <code class="px-2 py-1 bg-gray-100 rounded font-mono text-sm">{rule.url_pattern}</code>
-                  <span class="text-gray-500">({getMatchTypeLabel(rule.url_match_type)})</span>
+                  <span class="text-muted-foreground font-medium">Pattern:</span
+                  >
+                  <code class="px-2 py-0.5 bg-muted rounded font-mono text-sm"
+                    >{rule.url_pattern}</code
+                  >
+                  <Badge variant="outline" class="text-xs"
+                    >{getMatchTypeLabel(rule.url_match_type)}</Badge
+                  >
                 </div>
 
                 {#if rule.response.body}
                   <div class="text-sm">
-                    <span class="text-gray-600 font-medium">Response Body:</span>
-                    <pre class="mt-1 p-2 bg-gray-50 rounded text-xs overflow-x-auto max-h-32">{rule.response.body.length > 200 ? rule.response.body.substring(0, 200) + '...' : rule.response.body}</pre>
+                    <span class="text-muted-foreground font-medium"
+                      >Response:</span
+                    >
+                    <pre
+                      class="mt-1 p-2 bg-muted rounded text-xs font-mono overflow-x-auto max-h-20">{rule
+                        .response.body.length > 150
+                        ? rule.response.body.substring(0, 150) + "..."
+                        : rule.response.body}</pre>
                   </div>
                 {/if}
 
-                <div class="text-xs text-gray-500">
+                <p class="text-xs text-muted-foreground">
                   Created: {new Date(rule.created_at).toLocaleString()}
-                </div>
+                </p>
               </div>
             </div>
 
-            <div class="flex items-center gap-2 ml-4">
-              <button
-                onclick={() => toggleRule(rule.id)}
-                class="px-4 py-2 rounded font-medium {rule.enabled ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
-              >
-                {rule.enabled ? 'Enabled' : 'Disabled'}
-              </button>
-              <button
+            <div class="flex items-center gap-2">
+              <Switch
+                checked={rule.enabled}
+                onCheckedChange={() => toggleRule(rule.id)}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
                 onclick={() => goto(`/mocks/${rule.id}`)}
-                class="px-4 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
               >
-                Edit
-              </button>
-              <button
-                onclick={() => deleteRule(rule.id)}
-                class="px-4 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                <Pencil class="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onclick={() => confirmDelete(rule)}
               >
-                Delete
-              </button>
+                <Trash2 class="h-4 w-4 text-red-500" />
+              </Button>
             </div>
           </div>
-        </div>
-      {/each}
-    </div>
-  {/if}
-</div>
+        </Card.Content>
+      </Card.Root>
+    {/each}
+  </div>
+{/if}
+
+<!-- Delete Confirmation Dialog -->
+<Dialog.Root bind:open={deleteDialogOpen}>
+  <Dialog.Content>
+    <Dialog.Header>
+      <Dialog.Title>Delete Mock Rule</Dialog.Title>
+      <Dialog.Description>
+        Are you sure you want to delete "{ruleToDelete?.name}"? This action
+        cannot be undone.
+      </Dialog.Description>
+    </Dialog.Header>
+    <Dialog.Footer>
+      <Button variant="outline" onclick={() => (deleteDialogOpen = false)}
+        >Cancel</Button
+      >
+      <Button variant="destructive" onclick={deleteRule}>Delete</Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>

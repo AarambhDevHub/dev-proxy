@@ -1,16 +1,45 @@
 <script lang="ts">
-import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
-  import type { MockRule } from '$lib/types';
+  import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
+  import { page } from "$app/stores";
+  import { toast } from "svelte-sonner";
+  import * as Card from "$lib/components/ui/card";
+  import { Button } from "$lib/components/ui/button";
+  import { Input } from "$lib/components/ui/input";
+  import { Textarea } from "$lib/components/ui/textarea";
+  import { Label } from "$lib/components/ui/label";
+  import { Switch } from "$lib/components/ui/switch";
+  import { Skeleton } from "$lib/components/ui/skeleton";
+  import * as Select from "$lib/components/ui/select";
+  import { Separator } from "$lib/components/ui/separator";
+  import * as Alert from "$lib/components/ui/alert";
+  import { ArrowLeft, Save, Code, AlertCircle } from "lucide-svelte";
+  import type { MockRule } from "$lib/types";
 
   let rule: MockRule | null = $state(null);
-  let headersText = $state('');
+  let headersText = $state("");
   let loading = $state(true);
   let saving = $state(false);
-  let error = $state('');
+  let error = $state("");
 
   const id = $derived($page.params.id);
+
+  const methods = [
+    { value: "", label: "Any Method" },
+    { value: "GET", label: "GET" },
+    { value: "POST", label: "POST" },
+    { value: "PUT", label: "PUT" },
+    { value: "PATCH", label: "PATCH" },
+    { value: "DELETE", label: "DELETE" },
+  ];
+
+  const matchTypes = [
+    { value: "exact", label: "Exact Match" },
+    { value: "contains", label: "Contains" },
+    { value: "startswith", label: "Starts With" },
+    { value: "endswith", label: "Ends With" },
+    { value: "regex", label: "Regex" },
+  ];
 
   async function fetchRule() {
     try {
@@ -20,13 +49,13 @@ import { onMount } from 'svelte';
         if (rule) {
           headersText = Object.entries(rule.response.headers)
             .map(([k, v]) => `${k}: ${v}`)
-            .join('\n');
+            .join("\n");
         }
       } else {
-        error = 'Mock rule not found';
+        error = "Mock rule not found";
       }
     } catch (e) {
-      error = 'Failed to load mock rule';
+      error = "Failed to load mock rule";
     } finally {
       loading = false;
     }
@@ -34,23 +63,22 @@ import { onMount } from 'svelte';
 
   async function save() {
     if (!rule || !rule.name || !rule.url_pattern) {
-      error = 'Name and URL pattern are required';
+      error = "Name and URL pattern are required";
       return;
     }
 
     saving = true;
-    error = '';
+    error = "";
 
     try {
       const headers: Record<string, string> = {};
-      headersText.split('\n').forEach(line => {
-        const [key, ...valueParts] = line.split(':');
+      headersText.split("\n").forEach((line) => {
+        const [key, ...valueParts] = line.split(":");
         if (key && valueParts.length > 0) {
-          headers[key.trim()] = valueParts.join(':').trim();
+          headers[key.trim()] = valueParts.join(":").trim();
         }
       });
 
-      // Create update payload (includes id but not created_at)
       const payload = {
         id: rule.id,
         name: rule.name,
@@ -62,24 +90,25 @@ import { onMount } from 'svelte';
         response: {
           status: rule.response.status,
           headers,
-          body: rule.response.body
+          body: rule.response.body,
         },
-        delay_ms: rule.delay_ms
+        delay_ms: rule.delay_ms,
       };
 
       const res = await fetch(`/api/mocks/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
-        goto('/mocks');
+        toast.success("Mock rule updated");
+        goto("/mocks");
       } else {
-        error = 'Failed to update mock rule';
+        error = "Failed to update mock rule";
       }
     } catch (e) {
-      error = 'Failed to update mock rule: ' + e;
+      error = "Failed to update mock rule: " + e;
     } finally {
       saving = false;
     }
@@ -90,9 +119,7 @@ import { onMount } from 'svelte';
     try {
       const parsed = JSON.parse(rule.response.body);
       rule.response.body = JSON.stringify(parsed, null, 2);
-    } catch {
-      // Invalid JSON, keep as is
-    }
+    } catch {}
   }
 
   onMount(() => {
@@ -100,196 +127,172 @@ import { onMount } from 'svelte';
   });
 </script>
 
-<div class="container mx-auto px-4 py-8 max-w-4xl">
+<div class="max-w-4xl mx-auto">
   <div class="flex items-center gap-4 mb-6">
-    <button
-      onclick={() => goto('/mocks')}
-      class="text-blue-600 hover:text-blue-700"
-    >
-      ← Back
-    </button>
-    <h1 class="text-3xl font-bold">Edit Mock Rule</h1>
+    <Button variant="ghost" size="sm" onclick={() => goto("/mocks")}>
+      <ArrowLeft class="mr-2 h-4 w-4" />
+      Back
+    </Button>
+    <h1 class="text-3xl font-bold tracking-tight">Edit Mock Rule</h1>
   </div>
 
   {#if loading}
-    <div class="text-center py-12">
-      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-      <p class="mt-4 text-gray-600">Loading...</p>
-    </div>
+    <Card.Root>
+      <Card.Content class="p-6 space-y-4">
+        {#each Array(5) as _}
+          <Skeleton class="h-10 w-full" />
+        {/each}
+      </Card.Content>
+    </Card.Root>
   {:else if error && !rule}
-    <div class="text-center py-12 bg-white rounded-lg shadow">
-      <p class="text-red-600">{error}</p>
-    </div>
+    <Alert.Root variant="destructive">
+      <AlertCircle class="h-4 w-4" />
+      <Alert.Title>Error</Alert.Title>
+      <Alert.Description>{error}</Alert.Description>
+    </Alert.Root>
   {:else if rule}
     {#if error}
-      <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-        {error}
-      </div>
+      <Alert.Root variant="destructive" class="mb-6">
+        <AlertCircle class="h-4 w-4" />
+        <Alert.Title>Error</Alert.Title>
+        <Alert.Description>{error}</Alert.Description>
+      </Alert.Root>
     {/if}
 
-    <div class="bg-white rounded-lg shadow p-6 space-y-6">
-      <!-- Same form as new page, but with rule data -->
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            Rule Name *
-          </label>
-          <input
-            type="text"
-            bind:value={rule.name}
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            Priority
-          </label>
-          <input
-            type="number"
-            bind:value={rule.priority}
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-      </div>
-
-      <div class="border-t pt-6">
-        <h3 class="text-lg font-semibold mb-4">Request Matching</h3>
-
-        <div class="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              HTTP Method
-            </label>
-            <select
-              bind:value={rule.method}
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Any Method</option>
-              <option value="GET">GET</option>
-              <option value="POST">POST</option>
-              <option value="PUT">PUT</option>
-              <option value="PATCH">PATCH</option>
-              <option value="DELETE">DELETE</option>
-            </select>
+    <Card.Root>
+      <Card.Content class="pt-6 space-y-6">
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <Label for="name">Rule Name *</Label>
+            <Input id="name" bind:value={rule.name} />
           </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Match Type
-            </label>
-            <select
-              bind:value={rule.url_match_type}
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="exact">Exact Match</option>
-              <option value="contains">Contains</option>
-              <option value="startswith">Starts With</option>
-              <option value="endswith">Ends With</option>
-              <option value="regex">Regex</option>
-            </select>
+          <div class="space-y-2">
+            <Label for="priority">Priority</Label>
+            <Input id="priority" type="number" bind:value={rule.priority} />
           </div>
         </div>
 
+        <Separator />
+
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            URL Pattern *
-          </label>
-          <input
-            type="text"
-            bind:value={rule.url_pattern}
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <h3 class="text-lg font-semibold mb-4">Request Matching</h3>
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="space-y-2">
+              <Label>HTTP Method</Label>
+              <Select.Root
+                type="single"
+                value={methods.find((m) => m.value === (rule?.method || ""))}
+                onValueChange={(v) => {
+                  if (rule) rule.method = v?.value;
+                }}
+              >
+                <Select.Trigger>{rule.method || "Any Method"}</Select.Trigger>
+                <Select.Content>
+                  {#each methods as method}
+                    <Select.Item value={method.value}
+                      >{method.label}</Select.Item
+                    >
+                  {/each}
+                </Select.Content>
+              </Select.Root>
+            </div>
+            <div class="space-y-2">
+              <Label>Match Type</Label>
+              <Select.Root
+                type="single"
+                value={matchTypes.find((m) => m.value === rule?.url_match_type)}
+                onValueChange={(v) => {
+                  if (rule) rule.url_match_type = v?.value as any;
+                }}
+              >
+                <Select.Trigger
+                  >{matchTypes.find((m) => m.value === rule?.url_match_type)
+                    ?.label}</Select.Trigger
+                >
+                <Select.Content>
+                  {#each matchTypes as type}
+                    <Select.Item value={type.value}>{type.label}</Select.Item>
+                  {/each}
+                </Select.Content>
+              </Select.Root>
+            </div>
+          </div>
+          <div class="space-y-2">
+            <Label for="pattern">URL Pattern *</Label>
+            <Input id="pattern" bind:value={rule.url_pattern} />
+          </div>
         </div>
-      </div>
 
-      <div class="border-t pt-6">
-        <h3 class="text-lg font-semibold mb-4">Mock Response</h3>
+        <Separator />
 
-        <div class="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Status Code
-            </label>
-            <input
-              type="number"
-              bind:value={rule.response.status}
-              min="100"
-              max="599"
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        <div>
+          <h3 class="text-lg font-semibold mb-4">Mock Response</h3>
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="space-y-2">
+              <Label for="status">Status Code</Label>
+              <Input
+                id="status"
+                type="number"
+                bind:value={rule.response.status}
+                min="100"
+                max="599"
+              />
+            </div>
+            <div class="space-y-2">
+              <Label for="delay">Delay (ms)</Label>
+              <Input
+                id="delay"
+                type="number"
+                bind:value={rule.delay_ms}
+                min="0"
+              />
+            </div>
+          </div>
+          <div class="space-y-2 mb-4">
+            <Label for="headers">Response Headers</Label>
+            <Textarea
+              id="headers"
+              bind:value={headersText}
+              rows={3}
+              class="font-mono text-sm"
             />
           </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Delay (ms)
-            </label>
-            <input
-              type="number"
-              bind:value={rule.delay_ms}
-              min="0"
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          <div class="space-y-2">
+            <div class="flex justify-between items-center">
+              <Label for="body">Response Body</Label>
+              <Button variant="ghost" size="sm" onclick={formatJSON}>
+                <Code class="mr-2 h-4 w-4" />
+                Format JSON
+              </Button>
+            </div>
+            <Textarea
+              id="body"
+              bind:value={rule.response.body}
+              rows={10}
+              class="font-mono text-sm"
             />
           </div>
         </div>
 
-        <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            Response Headers
-          </label>
-          <textarea
-            bind:value={headersText}
-            rows="3"
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-          ></textarea>
+        <Separator />
+
+        <div class="flex items-center space-x-2">
+          <Switch id="enabled" bind:checked={rule.enabled} />
+          <Label for="enabled">Enable this rule</Label>
         </div>
 
-        <div>
-          <div class="flex justify-between items-center mb-2">
-            <label class="block text-sm font-medium text-gray-700">
-              Response Body
-            </label>
-            <button
-              onclick={formatJSON}
-              class="text-sm text-blue-600 hover:text-blue-700"
-            >
-              Format JSON
-            </button>
-          </div>
-          <textarea
-            bind:value={rule.response.body}
-            rows="10"
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-          ></textarea>
+        <Separator />
+
+        <div class="flex justify-end gap-4">
+          <Button variant="outline" onclick={() => goto("/mocks")}
+            >Cancel</Button
+          >
+          <Button onclick={save} disabled={saving}>
+            <Save class="mr-2 h-4 w-4" />
+            {saving ? "Saving..." : "Save Changes"}
+          </Button>
         </div>
-      </div>
-
-      <div class="border-t pt-6">
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            bind:checked={rule.enabled}
-            class="w-4 h-4"
-          />
-          <span class="text-sm font-medium text-gray-700">Enable this rule</span>
-        </label>
-      </div>
-
-      <div class="flex justify-end gap-4 border-t pt-6">
-        <button
-          onclick={() => goto('/mocks')}
-          class="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-        >
-          Cancel
-        </button>
-        <button
-          onclick={save}
-          disabled={saving}
-          class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-        >
-          {saving ? 'Saving...' : 'Save Changes'}
-        </button>
-      </div>
-    </div>
+      </Card.Content>
+    </Card.Root>
   {/if}
 </div>
